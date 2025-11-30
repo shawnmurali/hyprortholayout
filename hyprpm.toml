@@ -1,0 +1,11 @@
+[repository]
+name = "HyprOrthoLayout"
+authors = ["Shawn Murali"]
+
+[plugin-name]
+description = "A main/secondary stack layout where the stacks are orthogonal."
+authors = ["Shawn Murali"]
+output = "ortholayout.so"
+build = [
+	"make all"
+]
