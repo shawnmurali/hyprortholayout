@@ -1,4 +1,4 @@
-PKG_CONFIG_PATH := /usr/local/share/pkgconfig:$(PKG_CONFIG_PATH)
+PKG_CONFIG_PATH := /usr/share/pkgconfig:/usr/local/share/pkgconfig:$(PKG_CONFIG_PATH)
 export PKG_CONFIG_PATH
 
 # Else exist specifically for clang

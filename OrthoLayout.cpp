@@ -200,10 +200,10 @@ void COrthoLayout::onWindowRemovedTiling(PHLWINDOW pWindow)
 
     const auto &[nd, ws, status] = *result;
 
-    auto &MAINSTACK = m_mainStackByWorkspace[ws];
-    auto &SECONDARYSTACK = m_secondaryStackByWorkspace[ws];
-    static auto PMAINSTACKMIN = CConfigValue<Hyprlang::INT>("plugin:ortho:main_stack_min");
-    pWindow->m_ruleApplicator->resetProps(Desktop::Rule::RULE_PROP_ALL, Desktop::Types::PRIORITY_LAYOUT);
+    auto&       MAINSTACK      = m_mainStackByWorkspace[ws];
+    auto&       SECONDARYSTACK = m_secondaryStackByWorkspace[ws];
+    static auto PMAINSTACKMIN  = CConfigValue<Hyprlang::INT>("plugin:ortho:main_stack_min");
+    pWindow->unsetWindowData(PRIORITY_LAYOUT);
     pWindow->updateWindowData();
 
     if (status == ORTHOSTATUS_MAIN)
@@ -409,7 +409,7 @@ void COrthoLayout::applyNodeDataToWindow(SOrthoNodeData *pNode, const WORKSPACEI
     if (PWINDOW->isFullscreen() && !pNode->ignoreFullscreenChecks)
         return;
 
-    PWINDOW->m_ruleApplicator->resetProps(Desktop::Rule::RULE_PROP_ALL, Desktop::Types::PRIORITY_LAYOUT);
+    PWINDOW->unsetWindowData(PRIORITY_LAYOUT);
     PWINDOW->updateWindowData();
 
     static auto PANIMATE = CConfigValue<Hyprlang::INT>("misc:animate_manual_resizes");
@@ -456,8 +456,9 @@ void COrthoLayout::applyNodeDataToWindow(SOrthoNodeData *pNode, const WORKSPACEI
         Vector2D monitorAvailable = PMONITOR->m_size - PMONITOR->m_reservedTopLeft - PMONITOR->m_reservedBottomRight -
                                     Vector2D{(double)(gapsOut.m_left + gapsOut.m_right), (double)(gapsOut.m_top + gapsOut.m_bottom)} - Vector2D{2.0 * borderSize, 2.0 * borderSize};
 
-        Vector2D minSize = PWINDOW->m_ruleApplicator->minSize().valueOr(Vector2D{MIN_WINDOW_SIZE, MIN_WINDOW_SIZE}).clamp(Vector2D{0, 0}, monitorAvailable);
-        Vector2D maxSize = PWINDOW->isFullscreen() ? Vector2D{INFINITY, INFINITY} : PWINDOW->m_ruleApplicator->maxSize().valueOr(Vector2D{INFINITY, INFINITY}).clamp(Vector2D{0, 0}, monitorAvailable);
+        Vector2D minSize = PWINDOW->m_windowData.minSize.valueOr(Vector2D{MIN_WINDOW_SIZE, MIN_WINDOW_SIZE}).clamp(Vector2D{0, 0}, monitorAvailable);
+        Vector2D maxSize =
+            PWINDOW->isFullscreen() ? Vector2D{INFINITY, INFINITY} : PWINDOW->m_windowData.maxSize.valueOr(Vector2D{INFINITY, INFINITY}).clamp(Vector2D{0, 0}, monitorAvailable);
         calcSize = calcSize.clamp(minSize, maxSize);
 
         calcPos += (availableSpace - calcSize) / 2.0;
@@ -535,7 +536,7 @@ void COrthoLayout::fullscreenRequestForWindow(PHLWINDOW pWindow, const eFullscre
             *pWindow->m_realPosition = pWindow->m_lastFloatingPosition;
             *pWindow->m_realSize = pWindow->m_lastFloatingSize;
 
-            pWindow->m_ruleApplicator->resetProps(Desktop::Rule::RULE_PROP_ALL, Desktop::Types::PRIORITY_LAYOUT);
+            pWindow->unsetWindowData(PRIORITY_LAYOUT);
             pWindow->updateWindowData();
         }
     }
@@ -603,7 +604,7 @@ void COrthoLayout::moveWindowTo(PHLWINDOW pWindow, const std::string &dir, bool 
         if (!silent)
         {
             const auto pMonitor = pWindow->m_monitor.lock();
-            Desktop::focusState()->rawMonitorFocus(pMonitor);
+            g_pCompositor->setActiveMonitor(pMonitor);
         }
         onWindowCreatedTiling(pWindow);
     }
@@ -612,7 +613,7 @@ void COrthoLayout::moveWindowTo(PHLWINDOW pWindow, const std::string &dir, bool 
         // if same monitor, switch windows
         switchWindows(pWindow, PWINDOW2);
         if (silent)
-            Desktop::focusState()->fullWindowFocus(PWINDOW2);
+            g_pCompositor->focusWindow(PWINDOW2);
     }
 
     pWindow->updateGroupOutputs();
@@ -678,12 +679,12 @@ PHLWINDOW COrthoLayout::getNextWindowCandidate(PHLWINDOW pWindow)
 {
 
     const auto result = getNodeFromWindow(pWindow);
-    if (!result.has_value())
-    {
-        if (!Desktop::focusState()->monitor())
+    if (!result.has_value()) {
+        if (!g_pCompositor->m_lastMonitor)
             return nullptr;
-        const auto ws = Desktop::focusState()->monitor()->activeWorkspaceID();
-        const auto &mainStack = m_mainStackByWorkspace[ws];
+        
+        const auto  ws        = g_pCompositor->m_lastMonitor->m_activeWorkspace->m_id;
+        const auto& mainStack = m_mainStackByWorkspace[ws];
         if (mainStack.empty())
             return nullptr;
         return std::ranges::begin(mainStack)->pWindow.lock();
@@ -726,19 +727,18 @@ void COrthoLayout::replaceWindowDataWith(PHLWINDOW from, PHLWINDOW to)
 
 Vector2D COrthoLayout::predictSizeForNewWindowTiled()
 {
-    static auto PMAINSTACKMIN = CConfigValue<Hyprlang::INT>("plugin:ortho:main_stack_min");
-    const int mainStackMinimum = *PMAINSTACKMIN >= 1 ? *PMAINSTACKMIN : 1;
-    if (!Desktop::focusState()->monitor())
+    static auto PMAINSTACKMIN    = CConfigValue<Hyprlang::INT>("plugin:ortho:main_stack_min");
+    const int   mainStackMinimum = *PMAINSTACKMIN >= 1 ? *PMAINSTACKMIN : 1;
+    if (!g_pCompositor->m_lastMonitor || !g_pCompositor->m_lastMonitor->m_activeWorkspace)
         return {};
-    const auto WS = Desktop::focusState()->monitor()->m_activeWorkspace->m_id;
+    const auto WS = g_pCompositor->m_lastMonitor->m_activeWorkspace->m_id;
     const auto MAINSTACK = m_mainStackByWorkspace[WS];
     const auto SECONDARYSTACK = m_secondaryStackByWorkspace[WS];
     const auto WSDATA = m_orthoWorkspaceDataByWorkspace[WS];
-    const auto MSIZE = Desktop::focusState()->monitor()->m_size;
+    const auto MSIZE = g_pCompositor->m_lastMonitor.lock()->m_size;
 
-    if (MAINSTACK.size() == 0)
-    { // the workspace is empty as mainStackMin is at least 1
-        return Desktop::focusState()->monitor()->m_size;
+    if (MAINSTACK.size() == 0) { // the workspace is empty as mainStackMin is at least 1
+        return MSIZE;
     }
 
     if (MAINSTACK.size() < mainStackMinimum)
@@ -809,13 +809,24 @@ std::any COrthoLayout::layoutMessage(SLayoutMessageHeader header, std::string me
         if (!validMapped(PWINDOWTOCHANGETO))
             return;
 
-        Desktop::focusState()->fullWindowFocus(PWINDOWTOCHANGETO);
-        g_pCompositor->warpCursorTo(PWINDOWTOCHANGETO->middle());
+        if (header.pWindow->isFullscreen()) {
+            const auto  PWORKSPACE        = header.pWindow->m_workspace;
+            const auto  FSMODE            = header.pWindow->m_fullscreenState.internal;
+            static auto INHERITFULLSCREEN = CConfigValue<Hyprlang::INT>("master:inherit_fullscreen");
+            g_pCompositor->setWindowFullscreenInternal(header.pWindow, FSMODE_NONE);
+            g_pCompositor->focusWindow(PWINDOWTOCHANGETO);
+            if (*INHERITFULLSCREEN)
+                g_pCompositor->setWindowFullscreenInternal(PWINDOWTOCHANGETO, FSMODE);
+        } else {
+            g_pCompositor->focusWindow(PWINDOWTOCHANGETO);
+            g_pCompositor->warpCursorTo(PWINDOWTOCHANGETO->middle());
+        }
 
         g_pInputManager->m_forcedFocus = PWINDOWTOCHANGETO;
         g_pInputManager->simulateMouseMovement();
         g_pInputManager->m_forcedFocus.reset();
     };
+
     CVarList vars(message, 0, ' ');
 
     if (vars.size() < 1 || vars[0].empty())
