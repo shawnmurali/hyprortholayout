@@ -8,7 +8,7 @@
 #include <hyprland/src/helpers/memory/Memory.hpp>
 #include <hyprland/src/managers/HookSystemManager.hpp>
 #include <hyprland/src/desktop/DesktopTypes.hpp>
-#include <hyprland/src/helpers/varlist/VarList.hpp>
+#include <hyprutils/string/ConstVarList.hpp>
 
 enum eFullscreenMode : int8_t;
 
@@ -49,7 +49,8 @@ struct SOrthoWorkspaceData
     int mainStackMin = 1;
     WORKSPACEID workspaceID = WORKSPACE_INVALID;
     eMainSide mainSide = MAIN_SIDE_LEFT;
-
+    std::vector<double> mainWeightOverrides;
+    bool overrideMainWeights = false;
     bool operator==(const SOrthoWorkspaceData &rhs) const
     {
         return workspaceID == rhs.workspaceID;
@@ -99,6 +100,8 @@ private:
     void calculateWorkspace(PHLWORKSPACE);
     SOrthoNodeData *getMainStackTop(const WORKSPACEID &ws);
     SOrthoNodeData *getSecondaryStackTop(const WORKSPACEID &ws);
+    std::any messageAdjustWeight(SLayoutMessageHeader, CVarList);
+    std::any messageOverrideMainWeights(SLayoutMessageHeader, CVarList);
 
     friend struct SOrthoNodeData;
     friend struct SOrthoWorkspaceData;
