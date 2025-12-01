@@ -18,14 +18,14 @@
 #include <hyprutils/utils/ScopeGuard.hpp>
 #include "OrthoLayout.hpp"
 
-std::optional<std::tuple<SOrthoNodeData *, WORKSPACEID, eOrthoStatus>> COrthoLayout::getNodeFromWindow(PHLWINDOW pWindow)
+std::optional<SNodeLookupResult> COrthoLayout::getNodeFromWindow(PHLWINDOW pWindow)
 {
     for (auto &[ws, nodes] : m_mainStackByWorkspace)
     {
         for (auto &nd : nodes)
         {
             if (nd.pWindow.lock() == pWindow)
-                return std::optional{std::make_tuple(&nd, ws, ORTHOSTATUS_MAIN)};
+                return std::optional{SNodeLookupResult(&nd, ws, ORTHOSTATUS_MAIN)};
         }
     }
 
@@ -34,7 +34,7 @@ std::optional<std::tuple<SOrthoNodeData *, WORKSPACEID, eOrthoStatus>> COrthoLay
         for (auto &nd : nodes)
         {
             if (nd.pWindow.lock() == pWindow)
-                return std::optional{std::make_tuple(&nd, ws, ORTHOSTATUS_SECONDARY)};
+                return std::optional{SNodeLookupResult(&nd, ws, ORTHOSTATUS_SECONDARY)};
         }
     }
 
@@ -56,6 +56,37 @@ int COrthoLayout::getMainStackSize(const WORKSPACEID &ws)
     return m_mainStackByWorkspace[ws].size();
 }
 
+std::optional<std::vector<double>> parseOverrideWeights(CVarList tokens, size_t start, size_t end)
+{
+    std::vector<double> overrideWeights;
+
+    for (int i = std::max(start, size_t(0)); i < std::min(end, tokens.size()); ++i)
+    {
+        try
+        {
+            float overrideWeight = std::stof(tokens[i]);
+            overrideWeights.push_back(overrideWeight);
+        }
+        catch (const std::invalid_argument &e)
+        {
+            Debug::log(ERR, "layoutmsg overrideweight passed a non-float{}", e.what());
+            return std::nullopt;
+        }
+        catch (const std::out_of_range &e)
+        {
+            Debug::log(ERR, "layoutmsg overrideweight passed a float outofrange {}", e.what());
+            return std::nullopt;
+        }
+    }
+
+    return std::optional{overrideWeights};
+}
+
+std::optional<std::vector<double>> parseOverrideWeights(CVarList tokens)
+{
+    return parseOverrideWeights(tokens, size_t(0), tokens.size());
+}
+
 SOrthoWorkspaceData *COrthoLayout::getOrthoWorkspaceData(const WORKSPACEID &ws)
 {
     auto it = m_orthoWorkspaceDataByWorkspace.find(ws);
@@ -68,8 +99,16 @@ SOrthoWorkspaceData *COrthoLayout::getOrthoWorkspaceData(const WORKSPACEID &ws)
     static auto PMAINSIDE = CConfigValue<std::string>("plugin:ortho:main_stack_side");
     static auto PMAINPERCENT = CConfigValue<Hyprlang::FLOAT>("plugin:ortho:main_stack_percent");
     static auto PMAINSTACKMIN = CConfigValue<Hyprlang::INT>("plugin:ortho:main_stack_min");
+    static auto PMAINSTACKOVERRIDES = CConfigValue<std::string>("plugin:ortho:main_weight_overrides");
 
     SOrthoWorkspaceData workspaceData;
+
+    const auto &RESULT = parseOverrideWeights(CVarList(*PMAINSTACKOVERRIDES));
+    if (RESULT.has_value())
+    {
+        workspaceData.overrideMainWeights = true;
+        workspaceData.mainWeightOverrides = *RESULT;
+    }
 
     if (*PMAINSIDE == "right")
         workspaceData.mainSide = MAIN_SIDE_RIGHT;
@@ -727,6 +766,7 @@ Vector2D COrthoLayout::predictSizeForNewWindowTiled()
 
 void COrthoLayout::onEnable()
 {
+    m_configCallback = g_pHookSystem->hookDynamic("configReloaded", [this](void *hk, SCallbackInfo &info, std::any param) {}); // TODO load orientation and layout overrides
     for (auto const &w : g_pCompositor->m_windows)
     {
         if (w->m_isFloating || !w->m_isMapped || w->isHidden())
@@ -788,7 +828,6 @@ std::any COrthoLayout::layoutMessage(SLayoutMessageHeader header, std::string me
 
 std::any COrthoLayout::messageAdjustWeight(SLayoutMessageHeader header, CVarList vars)
 {
-
     const auto PWINDOW = header.pWindow;
     if (!PWINDOW)
         return 0;
@@ -860,31 +899,16 @@ std::any COrthoLayout::messageOverrideMainWeights(SLayoutMessageHeader header, C
     }
 
     const auto WS = header.pWindow->m_workspace->m_id;
-    std::vector<double> overrideWeights;
     const auto MAINSIZE = m_mainStackByWorkspace[WS].size();
+    auto WSDATA = getOrthoWorkspaceData(WS);
 
-    for (int i = 1; i < std::min(vars.size(), MAINSIZE); i++)
+    const auto RESULT = parseOverrideWeights(vars, size_t(1), vars.size());
+    if (RESULT.has_value())
     {
-        try
-        {
-            float overrideWeight = std::stof(vars[i]);
-            overrideWeights.push_back(overrideWeight);
-        }
-        catch (const std::invalid_argument &e)
-        {
-            Debug::log(ERR, "layoutmsg overrideweight passed a non-float{}", e.what());
-            return 0;
-        }
-        catch (const std::out_of_range &e)
-        {
-            Debug::log(ERR, "layoutmsg overrideweight passed a float outofrange {}", e.what());
-            return 0;
-        }
+        WSDATA->overrideMainWeights = true;
+        WSDATA->mainWeightOverrides = *RESULT;
     }
 
-    auto WSDATA = getOrthoWorkspaceData(WS);
-    WSDATA->overrideMainWeights = true;
-    WSDATA->mainWeightOverrides = overrideWeights;
     recalculateMonitor(header.pWindow->monitorID());
     return 0;
 }

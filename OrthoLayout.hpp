@@ -57,6 +57,13 @@ struct SOrthoWorkspaceData
     }
 };
 
+struct SNodeLookupResult
+{
+    SOrthoNodeData *nd;
+    WORKSPACEID ws;
+    eOrthoStatus status;
+};
+
 class COrthoLayout : public IHyprLayout
 {
 public:
@@ -88,10 +95,11 @@ private:
     std::unordered_map<WORKSPACEID, std::vector<SOrthoNodeData>> m_mainStackByWorkspace;
     std::unordered_map<WORKSPACEID, std::vector<SOrthoNodeData>> m_secondaryStackByWorkspace;
 
+    SP<HOOK_CALLBACK_FN> m_configCallback;
     bool m_forceWarps = false;
     bool inMain(SOrthoNodeData *);
     void applyNodeDataToWindow(SOrthoNodeData *, const WORKSPACEID &ws);
-    std::optional<std::tuple<SOrthoNodeData *, WORKSPACEID, eOrthoStatus>> getNodeFromWindow(PHLWINDOW pWindow);
+    std::optional<SNodeLookupResult> getNodeFromWindow(PHLWINDOW pWindow);
     int getNodeCountOnWorkspace(const WORKSPACEID &ws);
     int getSecondaryStackSize(const WORKSPACEID &ws);
     int getMainStackSize(const WORKSPACEID &ws);
