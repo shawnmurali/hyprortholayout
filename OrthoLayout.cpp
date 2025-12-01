@@ -64,7 +64,7 @@ std::optional<std::vector<double>> parseOverrideWeights(CVarList tokens, size_t 
     {
         try
         {
-            float overrideWeight = std::stof(std::string{tokens[i]});
+            float overrideWeight = std::stod(std::string{tokens[i]});
             overrideWeights.push_back(overrideWeight);
         }
         catch (const std::invalid_argument &e)
