@@ -262,9 +262,9 @@ void COrthoLayout::calculateWorkspace(PHLWORKSPACE pWorkspace)
     }
     else
     {
-        for (double weight : OVERRIDEWEIGHTS)
+        for (int i = 0; i < std::min(OVERRIDEWEIGHTS.size(), MAINSTACK.size()); ++i)
         {
-            totalWeight += weight;
+            totalWeight += OVERRIDEWEIGHTS[i];
         }
         if (OVERRIDEWEIGHTS.size() < MAINSTACK.size())
             totalWeight += MAINSTACK.size() - OVERRIDEWEIGHTS.size();
@@ -281,6 +281,7 @@ void COrthoLayout::calculateWorkspace(PHLWORKSPACE pWorkspace)
         const double WEIGHT = !BOVERRIDEMAIN ? nd.weight : weights_it == OVERRIDEWEIGHTS.end() ? 1
                                                                                                : *weights_it;
         const double WIDTH = std::min(widthToSplit * WEIGHT / totalWeight, remainingWidth);
+
         if (!BISRIGHT)
             nextX -= WIDTH;
 
@@ -289,8 +290,11 @@ void COrthoLayout::calculateWorkspace(PHLWORKSPACE pWorkspace)
 
         if (BISRIGHT)
             nextX += WIDTH;
+
         remainingWidth -= WIDTH;
         applyNodeDataToWindow(&nd, pWorkspace->m_id);
+        if (weights_it != OVERRIDEWEIGHTS.end())
+            ++weights_it;
     }
 
     if (SECONDARYSTACK.empty())
