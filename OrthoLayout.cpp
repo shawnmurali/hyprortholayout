@@ -17,6 +17,7 @@
 #include <hyprutils/string/ConstVarList.hpp>
 #include <hyprutils/utils/ScopeGuard.hpp>
 #include "OrthoLayout.hpp"
+#include "Utils.hpp"
 
 std::optional<SNodeLookupResult> COrthoLayout::getNodeFromWindow(PHLWINDOW pWindow)
 {
@@ -25,7 +26,7 @@ std::optional<SNodeLookupResult> COrthoLayout::getNodeFromWindow(PHLWINDOW pWind
         for (auto &nd : nodes)
         {
             if (nd.pWindow.lock() == pWindow)
-                return std::optional{SNodeLookupResult(&nd, ws, ORTHOSTATUS_MAIN)};
+                return SNodeLookupResult(&nd, ws, ORTHOSTATUS_MAIN);
         }
     }
 
@@ -34,7 +35,7 @@ std::optional<SNodeLookupResult> COrthoLayout::getNodeFromWindow(PHLWINDOW pWind
         for (auto &nd : nodes)
         {
             if (nd.pWindow.lock() == pWindow)
-                return std::optional{SNodeLookupResult(&nd, ws, ORTHOSTATUS_SECONDARY)};
+                return SNodeLookupResult(&nd, ws, ORTHOSTATUS_SECONDARY);
         }
     }
 
@@ -64,7 +65,7 @@ std::optional<std::vector<double>> parseOverrideWeights(CVarList tokens, size_t 
     {
         try
         {
-            float overrideWeight = std::stof(tokens[i]);
+            float overrideWeight = std::stof(std::string{tokens[i]});
             overrideWeights.push_back(overrideWeight);
         }
         catch (const std::invalid_argument &e)
@@ -79,7 +80,7 @@ std::optional<std::vector<double>> parseOverrideWeights(CVarList tokens, size_t 
         }
     }
 
-    return std::optional{overrideWeights};
+    return overrideWeights;
 }
 
 std::optional<std::vector<double>> parseOverrideWeights(CVarList tokens)
@@ -99,16 +100,22 @@ SOrthoWorkspaceData *COrthoLayout::getOrthoWorkspaceData(const WORKSPACEID &ws)
     static auto PMAINSIDE = CConfigValue<std::string>("plugin:ortho:main_stack_side");
     static auto PMAINPERCENT = CConfigValue<Hyprlang::FLOAT>("plugin:ortho:main_stack_percent");
     static auto PMAINSTACKMIN = CConfigValue<Hyprlang::INT>("plugin:ortho:main_stack_min");
-    static auto PMAINSTACKOVERRIDES = CConfigValue<std::string>("plugin:ortho:main_weight_overrides");
+    static auto PMAINSTACKOVERRIDES = CConfigValue<Hyprlang::STRING>("plugin:ortho:main_weight_overrides");
 
     SOrthoWorkspaceData workspaceData;
+    // comes in as quoted csv
+    auto weights = std::string(*PMAINSTACKOVERRIDES);
+    const auto RESULT = parseOverrideWeights(CVarList(weights.substr(1, weights.length() - 2), 0, ','));
 
-    const auto WEIGHTTOKENS = CVarList(*PMAINSTACKOVERRIDES, 0, ' ');
-    const auto RESULT = parseOverrideWeights(WEIGHTTOKENS);
     if (RESULT.has_value())
     {
         workspaceData.overrideMainWeights = true;
         workspaceData.mainWeightOverrides = *RESULT;
+        Debug::log(LOG, "Successfully parsed override weights.");
+    }
+    else
+    {
+        Debug::log(ERR, "Error parsing main override weights.");
     }
 
     if (*PMAINSIDE == "right")
