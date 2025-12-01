@@ -873,7 +873,7 @@ std::any COrthoLayout::messageOverrideMainWeights(SLayoutMessageHeader header, C
         }
         catch (const std::out_of_range &e)
         {
-            Debug::log(ERR, "layoutmsg overrideweight passed a flot outofrange {}", e.what());
+            Debug::log(ERR, "layoutmsg overrideweight passed a float outofrange {}", e.what());
             return 0;
         }
     }
@@ -881,5 +881,6 @@ std::any COrthoLayout::messageOverrideMainWeights(SLayoutMessageHeader header, C
     auto WSDATA = getOrthoWorkspaceData(WS);
     WSDATA->overrideMainWeights = true;
     WSDATA->mainWeightOverrides = overrideWeights;
+    recalculateMonitor(header.pWindow->monitorID());
     return 0;
 }
