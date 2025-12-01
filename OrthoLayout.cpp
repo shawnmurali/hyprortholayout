@@ -103,7 +103,8 @@ SOrthoWorkspaceData *COrthoLayout::getOrthoWorkspaceData(const WORKSPACEID &ws)
 
     SOrthoWorkspaceData workspaceData;
 
-    const auto RESULT = parseOverrideWeights(CVarList(*PMAINSTACKOVERRIDES, 0, ' '));
+    const auto WEIGHTTOKENS = CVarList(*PMAINSTACKOVERRIDES, 0, ' ');
+    const auto RESULT = parseOverrideWeights(WEIGHTTOKENS);
     if (RESULT.has_value())
     {
         workspaceData.overrideMainWeights = true;
