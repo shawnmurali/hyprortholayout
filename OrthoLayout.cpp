@@ -17,7 +17,6 @@
 #include <hyprutils/string/ConstVarList.hpp>
 #include <hyprutils/utils/ScopeGuard.hpp>
 #include "OrthoLayout.hpp"
-#include "Utils.hpp"
 
 std::optional<SNodeLookupResult> COrthoLayout::getNodeFromWindow(PHLWINDOW pWindow)
 {
