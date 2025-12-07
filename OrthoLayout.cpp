@@ -101,19 +101,22 @@ SOrthoWorkspaceData *COrthoLayout::getOrthoWorkspaceData(const WORKSPACEID &ws)
     static auto PMAINSTACKOVERRIDES = CConfigValue<Hyprlang::STRING>("plugin:ortho:main_weight_overrides");
 
     SOrthoWorkspaceData workspaceData;
-    // comes in as quoted csv
-    auto weights = std::string(*PMAINSTACKOVERRIDES);
-    const auto RESULT = parseOverrideWeights(CVarList(weights.substr(1, weights.length() - 2), 0, ','));
+    if (*PMAINSTACKOVERRIDES)
+    {
+        // comes in as quoted csv
+        auto weights = std::string(*PMAINSTACKOVERRIDES);
+        const auto RESULT = parseOverrideWeights(CVarList(weights.substr(1, weights.length() - 2), 0, ','));
 
-    if (RESULT.has_value())
-    {
-        workspaceData.overrideMainWeights = true;
-        workspaceData.mainWeightOverrides = *RESULT;
-        Debug::log(LOG, "Successfully parsed override weights.");
-    }
-    else
-    {
-        Debug::log(ERR, "Error parsing main override weights.");
+        if (RESULT.has_value())
+        {
+            workspaceData.overrideMainWeights = true;
+            workspaceData.mainWeightOverrides = *RESULT;
+            Debug::log(LOG, "Successfully parsed override weights.");
+        }
+        else
+        {
+            Debug::log(ERR, "Error parsing main override weights.");
+        }
     }
 
     if (*PMAINSIDE == "right")
@@ -199,9 +202,9 @@ void COrthoLayout::onWindowRemovedTiling(PHLWINDOW pWindow)
 
     const auto &[nd, ws, status] = *result;
 
-    auto&       MAINSTACK      = m_mainStackByWorkspace[ws];
-    auto&       SECONDARYSTACK = m_secondaryStackByWorkspace[ws];
-    static auto PMAINSTACKMIN  = CConfigValue<Hyprlang::INT>("plugin:ortho:main_stack_min");
+    auto &MAINSTACK = m_mainStackByWorkspace[ws];
+    auto &SECONDARYSTACK = m_secondaryStackByWorkspace[ws];
+    static auto PMAINSTACKMIN = CConfigValue<Hyprlang::INT>("plugin:ortho:main_stack_min");
     pWindow->unsetWindowData(PRIORITY_LAYOUT);
     pWindow->updateWindowData();
 
@@ -678,12 +681,13 @@ PHLWINDOW COrthoLayout::getNextWindowCandidate(PHLWINDOW pWindow)
 {
 
     const auto result = getNodeFromWindow(pWindow);
-    if (!result.has_value()) {
+    if (!result.has_value())
+    {
         if (!g_pCompositor->m_lastMonitor)
             return nullptr;
-        
-        const auto  ws        = g_pCompositor->m_lastMonitor->m_activeWorkspace->m_id;
-        const auto& mainStack = m_mainStackByWorkspace[ws];
+
+        const auto ws = g_pCompositor->m_lastMonitor->m_activeWorkspace->m_id;
+        const auto &mainStack = m_mainStackByWorkspace[ws];
         if (mainStack.empty())
             return nullptr;
         return std::ranges::begin(mainStack)->pWindow.lock();
@@ -726,8 +730,8 @@ void COrthoLayout::replaceWindowDataWith(PHLWINDOW from, PHLWINDOW to)
 
 Vector2D COrthoLayout::predictSizeForNewWindowTiled()
 {
-    static auto PMAINSTACKMIN    = CConfigValue<Hyprlang::INT>("plugin:ortho:main_stack_min");
-    const int   mainStackMinimum = *PMAINSTACKMIN >= 1 ? *PMAINSTACKMIN : 1;
+    static auto PMAINSTACKMIN = CConfigValue<Hyprlang::INT>("plugin:ortho:main_stack_min");
+    const int mainStackMinimum = *PMAINSTACKMIN >= 1 ? *PMAINSTACKMIN : 1;
     if (!g_pCompositor->m_lastMonitor || !g_pCompositor->m_lastMonitor->m_activeWorkspace)
         return {};
     const auto WS = g_pCompositor->m_lastMonitor->m_activeWorkspace->m_id;
@@ -736,7 +740,8 @@ Vector2D COrthoLayout::predictSizeForNewWindowTiled()
     const auto WSDATA = m_orthoWorkspaceDataByWorkspace[WS];
     const auto MSIZE = g_pCompositor->m_lastMonitor.lock()->m_size;
 
-    if (MAINSTACK.size() == 0) { // the workspace is empty as mainStackMin is at least 1
+    if (MAINSTACK.size() == 0)
+    { // the workspace is empty as mainStackMin is at least 1
         return MSIZE;
     }
 
@@ -808,15 +813,18 @@ std::any COrthoLayout::layoutMessage(SLayoutMessageHeader header, std::string me
         if (!validMapped(PWINDOWTOCHANGETO))
             return;
 
-        if (header.pWindow->isFullscreen()) {
-            const auto  PWORKSPACE        = header.pWindow->m_workspace;
-            const auto  FSMODE            = header.pWindow->m_fullscreenState.internal;
+        if (header.pWindow->isFullscreen())
+        {
+            const auto PWORKSPACE = header.pWindow->m_workspace;
+            const auto FSMODE = header.pWindow->m_fullscreenState.internal;
             static auto INHERITFULLSCREEN = CConfigValue<Hyprlang::INT>("master:inherit_fullscreen");
             g_pCompositor->setWindowFullscreenInternal(header.pWindow, FSMODE_NONE);
             g_pCompositor->focusWindow(PWINDOWTOCHANGETO);
             if (*INHERITFULLSCREEN)
                 g_pCompositor->setWindowFullscreenInternal(PWINDOWTOCHANGETO, FSMODE);
-        } else {
+        }
+        else
+        {
             g_pCompositor->focusWindow(PWINDOWTOCHANGETO);
             g_pCompositor->warpCursorTo(PWINDOWTOCHANGETO->middle());
         }
