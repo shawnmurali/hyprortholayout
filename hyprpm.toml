@@ -3,7 +3,7 @@ name = "HyprOrthoLayout"
 authors = ["Shawn Murali"]
 commit_pins = [
 	["7e1e24fea615503a3cc05218c12b06c1b6cabdc7", "2b587dcc3148d6306170fff06d3f34b9aeea8e28"],
-	["967c3c7404d4fa00234e29c70df3e263386d2597", "b14c0b70a4d44498dad749777a246cc595db5296"]
+	["967c3c7404d4fa00234e29c70df3e263386d2597", "e18db91a9ca4d4459cf6de0f9276ec4101cf9910"]
 ]
 [hyprortholayout]
 description = "A main/secondary stack layout where the stacks are orthogonal."
